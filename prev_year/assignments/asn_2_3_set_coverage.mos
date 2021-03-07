@@ -1,0 +1,96 @@
+model Coverage
+ uses "mmxprs"
+
+declarations
+  NS = 10                               ! Number of supply points
+  S = 1..NS                            ! Set (range) of supply points
+  ND = 30                                ! Number of demand points
+  D = 1..ND                            ! Set (range) of demand points
+
+  FAC: array(S) of mpvar
+  dist:array(S,D) of integer            ! distances
+    c: array(S,D) of integer            ! incidence matrix
+    
+  cut = 24                              !cutoff distance for coverage
+end-declarations
+
+dist::  [3,4,5,6,7,8,9,10,11,12,12,13,14,15,16,17,18,19,20,21,20,21,22,23,24,25,26,27,28,29,
+      5,6,7,8,9,10,11,12,13,14,13,14,15,16,17,18,19,20,21,22,19,20,21,22,23,24,25,26,27,28,
+      7,8,9,10,11,12,13,14,15,16,14,15,16,17,18,19,20,21,22,23,18,19,20,21,22,23,24,25,26,27,
+      9,10,11,12,13,14,15,16,17,18,15,16,17,18,19,20,21,22,23,24,17,18,19,20,21,22,23,24,25,26,
+      11,12,13,14,15,16,17,18,19,20,16,17,18,19,20,21,22,23,24,25,16,17,18,19,20,21,22,23,24,25,
+      13,14,15,16,17,18,19,20,21,22,17,18,19,20,21,22,23,24,25,26,15,16,17,18,19,20,21,22,23,24,
+      15,16,17,18,19,20,21,22,23,24,18,19,20,21,22,23,24,25,26,27,14,15,16,17,18,19,20,21,22,23,
+      17,18,19,20,21,22,23,24,25,26,19,20,21,22,23,24,25,26,27,28,13,14,15,16,17,18,19,20,21,22,
+      19,20,21,22,23,24,25,26,27,28,20,21,22,23,24,25,26,27,28,29,12,13,14,15,16,17,18,19,20,21,
+      21,22,23,24,25,26,27,28,29,30,21,22,23,24,25,26,27,28,29,30,11,12,13,14,15,16,17,18,19,20]
+
+forall(i in S,j in D) do
+   if dist(i,j)<=cut 
+   then c(i,j):=1 
+   end-if
+end-do
+
+forall(i in S)
+    FAC(i) is_binary
+
+! Objective
+ TC:= sum(i in S) FAC(i)
+
+! Coverage
+ forall(j in D) sum(i in S) c(i,j)*FAC(i) >= 1
+
+! Solve the problem
+ minimize(TC)
+
+ writeln("Total cost: ", getobjval)
+
+write("Covers?");
+
+forall(j in D)
+  write(strfmt(j,3,0))
+writeln
+
+writeln("____________________________________________________________________________________________________")
+forall(i in S) do
+  write("Node",strfmt(i,2,0),":")
+  forall(j in D)
+    write(strfmt(c(i,j),3))
+  write(" | ",strfmt(sum(j in D) c(i,j),3))
+  writeln
+end-do
+writeln("____________________________________________________________________________________________________")
+write("   TOT:")
+forall(j in D)
+  write(strfmt(sum(i in S) c(i,j),3,0))
+writeln
+writeln("____________________________________________________________________________________________________")
+writeln("Solution below.")
+writeln("____________________________________________________________________________________________________")
+
+
+
+write("    To:");
+
+forall(j in D)
+  write(strfmt(j,3,0))
+writeln(" | TS")
+
+writeln("____________________________________________________________________________________________________")
+
+forall(i in S) do
+  write("From",strfmt(i,2,0),":")
+  forall(j in D)
+    write(strfmt(getsol(c(i,j)*FAC(i)),3,0))
+  write(" | ",strfmt(getsol(sum(j in D) c(i,j)*FAC(i)),3,0))
+  writeln
+end-do
+
+writeln("____________________________________________________________________________________________________")
+write("   TD:  ")
+forall(j in D)
+  write(strfmt(getsol(sum(i in S) c(i,j)*FAC(i)),3,0))
+!**********************************************************************!)
+
+ end-model
+

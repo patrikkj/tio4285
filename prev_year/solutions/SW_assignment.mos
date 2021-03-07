@@ -1,0 +1,32 @@
+!SW maximization on a single node. Solution assignment 4.2
+!Ruud Egging-Bratseth, 2020. Lecture notes NTNU TIØ4285, Production and Network Economics.
+
+model "SW_opt"
+ uses "mmxprs","mmquad"
+
+parameters
+   a=  20	  ! intercept of the inverse demand curve
+   b=   1     ! negative slope of inverse demand curve
+   c=   2     ! constant cost term in productoin cost   c*q + d*q^2
+   d=   0.5   ! increasing cost term in productoin cost c*q + d*q^2
+end-parameters
+
+declarations
+	Q: mpvar;
+	Z: qexp;
+end-declarations
+
+Q>=0
+
+!def_sw :=
+Z:= 0.5*b*Q*Q + (a - b*Q)*Q  - (c + d*Q)*Q
+
+maximize(Z);
+
+writeln("Supply        ", getsol(Q))
+writeln("Social welfare: ", getobjval)
+writeln("Market price  ", a - b*getsol(Q))
+
+end-model
+
+

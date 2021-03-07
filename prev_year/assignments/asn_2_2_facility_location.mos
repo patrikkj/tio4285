@@ -1,0 +1,82 @@
+model Facility
+ uses "mmxprs"
+
+declarations
+  NS = 10                               ! Number of supply points
+  S = 1..NS                            ! Set (range) of supply points
+  ND = 30                                ! Number of demand points
+  D = 1..ND                            ! Set (range) of demand points
+
+  FAC: array(S) of mpvar
+    f: array(S) of real              ! fixed facility cost
+  cap: array(S) of integer             ! supply
+
+  dmd: array(D) of integer             ! demand
+
+    c: array(S,D) of integer            ! transport cost values
+  FLW: array(S,D) of mpvar              ! shipment sizes
+
+  aux= 20
+end-declarations
+
+
+cap:: [200,  250,  300,  350,  400,  450,  500,  550,  600,  650]
+dmd:: [10, 20, 30, 40, 50, 42, 49, 56, 63, 70, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 63, 66, 69, 72, 75, 78, 81, 84, 87, 90]
+f::   [500,  550,  600,  650,  700,  750,  800,  850,  900,  950]
+c::  [3,4,5,6,7,8,9,10,11,12,12,13,14,15,16,17,18,19,20,21,20,21,22,23,24,25,26,27,28,29,
+      5,6,7,8,9,10,11,12,13,14,13,14,15,16,17,18,19,20,21,22,19,20,21,22,23,24,25,26,27,28,
+      7,8,9,10,11,12,13,14,15,16,14,15,16,17,18,19,20,21,22,23,18,19,20,21,22,23,24,25,26,27,
+      9,10,11,12,13,14,15,16,17,18,15,16,17,18,19,20,21,22,23,24,17,18,19,20,21,22,23,24,25,26,
+      11,12,13,14,15,16,17,18,19,20,16,17,18,19,20,21,22,23,24,25,16,17,18,19,20,21,22,23,24,25,
+      13,14,15,16,17,18,19,20,21,22,17,18,19,20,21,22,23,24,25,26,15,16,17,18,19,20,21,22,23,24,
+      15,16,17,18,19,20,21,22,23,24,18,19,20,21,22,23,24,25,26,27,14,15,16,17,18,19,20,21,22,23,
+      17,18,19,20,21,22,23,24,25,26,19,20,21,22,23,24,25,26,27,28,13,14,15,16,17,18,19,20,21,22,
+      19,20,21,22,23,24,25,26,27,28,20,21,22,23,24,25,26,27,28,29,12,13,14,15,16,17,18,19,20,21,
+      21,22,23,24,25,26,27,28,29,30,21,22,23,24,25,26,27,28,29,30,11,12,13,14,15,16,17,18,19,20]
+
+forall(i in S)
+    FAC(i) is_binary
+
+! Objective
+ TC:= sum(i in S) f(i)*FAC(i) + sum(i in S, j in D) c(i,j)*FLW(i,j)
+
+! Supply
+ forall(i in S) sum(j in D) FLW(i,j) <=FAC(i)*cap(i)
+
+! Demand
+ forall(j in D) sum(i in S) FLW(i,j) = dmd(j)
+
+! Solve the problem
+ minimize(TC)
+
+ writeln("Total cost: ", getobjval)
+
+!(!*********************************************************************
+write("    To:");
+
+forall(j in D)
+  write(strfmt(j,3,0))
+writeln(" | TS | cap")
+
+write("Demand:");
+forall(j in D)
+  write(strfmt(dmd(j),3,0))
+writeln(" |")
+writeln("____________________________________________________________________________________________________")
+
+forall(i in S) do
+  write("From",strfmt(i,2,0),":")
+  forall(j in D)
+    write(strfmt(getsol(FLW(i,j)),3,0))
+  write(" | ",strfmt(getsol(sum(j in D) FLW(i,j)),3,0),"|",strfmt(cap(i),3,0))
+  writeln
+end-do
+
+writeln("____________________________________________________________________________________________________")
+write("   TD:  ")
+forall(j in D)
+  write(strfmt(getsol(sum(i in S) FLW(i,j)),3,0))
+!**********************************************************************!)
+
+ end-model
+

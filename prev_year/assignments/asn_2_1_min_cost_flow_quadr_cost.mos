@@ -1,0 +1,86 @@
+(!*********************************************************************
+   Based on file assignment_graph.mos which is (c) 2008 Fair Isaac Corporation
+   Implementation for Hillier & Lieberman, p. 321
+**********************************************************************!)
+
+model MinCostFlow
+ uses "mmxprs","mmquad"
+
+declarations
+  NN = 7                               ! Number of nodes
+  N = 1..NN                            ! Set (range) of nodes
+    c: array(N) of integer
+    d: array(N) of real
+  cap: array(N) of integer             ! supply
+  PRD: array(N) of mpvar
+
+    f: array(N,N) of real            ! flow cost values
+  FLW: array(N,N) of mpvar              ! shipment sizes
+
+  dmd: array(N) of integer             ! demand
+
+ end-declarations
+
+ c(1):=1; d(1):=0.25;
+ c(2):=2; d(2):=0.25;
+cap:: [10,10,0,0,0,0,0]
+
+!Note division by 10 of transport cost in the objective function
+!  To: 1 2 3 4 5 6 7    From
+ f::  [0,0,2,5,0,8,0,  !1
+       0,0,0,5,3,0,6,  !2
+       0,0,0,0,0,2,0,  !3
+       0,0,0,0,0,3,2,  !4
+       0,0,0,0,0,0,2,  !5
+       0,0,0,0,0,0,0,  !6
+       0,0,0,0,0,0,0]  !7
+dmd:: [0,0,0,0,0,4,6]
+
+forall(i in N, j in N)
+  if f(i,j) <= 0
+    then FLW(i,j) = 0
+  end-if
+
+! Objective
+ TC:= sum(i in N) (c(i) + d(i)*PRD(i)/2) * PRD(i) + (sum(i,j in N) f(i,j)*FLW(i,j)*FLW(i,j)/10)
+
+! Mass balances
+ forall(i in N)
+    PRD(i) + sum(j in N) FLW(j,i) = dmd(i) + sum(j in N) FLW(i,j)
+
+!Capacity restriction
+forall(i in N)
+    PRD(i) <= cap(i)
+
+! Solve the problem
+ minimize(TC)
+
+ writeln("Total cost: ", strfmt(getobjval,8,4))
+
+!(!*********************************************************************
+write("             To: |");
+
+forall(j in N)
+  write(strfmt(j,8,0))
+writeln("    | Total out")
+writeln("          Supply |")
+writeln("____________________________________________________________________________________________")
+
+forall(i in N) do
+  write("From",strfmt(i,3,0),": ")
+  write(strfmt(getsol(PRD(i)),7,3)," | ")
+
+  forall(j in N)
+    write(strfmt(getsol(FLW(i,j)),8,1))
+  write("   |    ",strfmt(getsol(sum(j in N) FLW(i,j)),7,3))
+  writeln
+end-do
+
+writeln("____________________________________________________________________________________________")
+write("Total In:          ")
+forall(j in N)
+  write(strfmt(getsol(sum(i in N) FLW(i,j)),8,1))
+!**********************************************************************!)
+
+end-model
+
