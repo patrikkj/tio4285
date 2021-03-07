@@ -1,0 +1,143 @@
+! This file is the mathematical model of Facility Location with Lagrangean Relaxation and subgradient
+! Created by Henrik Andersson 2021-10-29
+! Henrik Andersson, I�T, henrik.andersson@ntnu.no
+! ------------------------------------------------------------------------------
+model Exercise2B
+
+options explterm
+options noimplicit
+
+uses "mmxprs";
+
+
+declarations
+	inputFile:			string;
+	Factories: 			set of integer;
+	Dists: 	            set of integer;
+	Customers: 	        set of integer;
+	nFactories: 		integer;
+	nDists: 		    integer;
+	nCustomers: 		integer;
+end-declarations
+
+inputFile := "exercise_2b.txt";
+
+
+! Read input sets
+initializations from inputFile
+	nFactories;
+	nDists;
+	nCustomers;
+end-initializations
+
+Factories := 1..nFactories;
+Dists := 1..nDists;
+Customers := 1..nCustomers;
+
+
+! Read input parameters
+declarations
+	CostFD: 		    dynamic array(Factories, Dists) of real;			    !c_{f,d}
+	CostFC: 		    dynamic array(Factories, Customers) of real;			!c_{f,c}
+	CostDC: 		    dynamic array(Dists, Customers) of real;			    !c_{d,c}
+	ProductionCapacity: dynamic array(Factories) of integer;				    !q_{f}
+	MaxThroughput: 	    dynamic array(Dists) of integer;				        !t_{d}
+	Demand: 		    dynamic array(Customers) of integer;					!d_{c}
+end-declarations
+
+initializations from inputFile
+	CostFD;
+	CostFC;
+	CostDC;
+	ProductionCapacity;
+	MaxThroughput;
+	Demand;
+end-initializations
+
+
+! Declare model
+declarations
+  Objective:				    linctr;                                                 ! Objective
+  ProductionCapConstraints:     dynamic array(Factories) of linctr;                     ! (1) Production capacity
+  FlowConstraints: 	            dynamic array(Dists) of linctr;                         ! (2) Flow conservation
+  ThroughputCapConstraints: 	dynamic array(Dists) of linctr;                         ! (3) Distribution center throughput
+  DemandConstraints: 	        dynamic array(Customers) of linctr;                     ! (4) Customer demand
+  x: 						    dynamic array(Factories, Dists) of mpvar;               ! (5) Flow from factory to distribution center
+  y: 						    dynamic array(Factories, Customers) of mpvar;           ! (6) Flow from factory to customer
+  z: 						    dynamic array(Dists, Customers) of mpvar;               ! (7) Flow from distribution center to customer
+end-declarations
+
+
+! Initialize variables
+forall(f in Factories, d in Dists | not CostFD(f,d) = -1) do
+	create(x(f,d));
+end-do
+
+forall(f in Factories, c in Customers | not CostFC(f,c) = -1) do
+	create(y(f,c));
+end-do
+
+forall(d in Dists, c in Customers | not CostDC(d,c) = -1) do
+	create(z(d,c));
+end-do
+
+
+! (1) Production capacity
+forall(f in Factories) do
+	ProductionCapConstraints(f) :=
+	        sum(d in Dists) x(f,d) +
+	        sum(c in Customers) y(f,c) <= ProductionCapacity(f);
+end-do
+
+! (2) Flow conservation constraint
+forall(d in Dists) do
+	FlowConstraints(d) := sum(f in Factories) x(f,d) = sum(c in Customers) z(d,c);
+end-do
+
+! (3) Distribution center throughput constraint
+forall(d in Dists) do
+    ThroughputCapConstraints(d) := sum(f in Factories) x(f,d) <= MaxThroughput(d);
+end-do
+
+! (4) Customer demand constraint
+forall(c in Customers) do
+    DemandConstraints(c) := sum(f in Factories) y(f,c) + sum(d in Dists) z(d,c) = Demand(c);
+end-do
+
+
+! Solve model
+Objective := sum(f in Factories, d in Dists)        CostFD(f,d) * x(f,d) +
+             sum(f in Factories, c in Customers)    CostFC(f,c) * y(f,c) +
+	         sum(d in Dists, c in Customers)        CostDC(d,c) * z(d,c);
+minimize(Objective);
+
+
+
+writeln("\n--------- SOLUTION ---------");
+writeln("Objective value: " + getsol(Objective));
+writeln;
+
+writeln("CostFD: ", CostFD);
+writeln("CostFC: ", CostFC);
+writeln("CostDC: ", CostDC);
+writeln("ProductionCapacity: ", ProductionCapacity);
+writeln("MaxThroughput: ", MaxThroughput);
+writeln("Demand: ", Demand);
+
+writeln("\nVariables are: ");
+forall(ff in Factories, dd in Dists) do
+	writeln("x("+ff+","+dd+"): ", getsol(x(ff,dd)));
+end-do
+writeln;
+
+forall(ff in Factories, cc in Customers) do
+	writeln("y("+ff+","+cc+"): ", getsol(y(ff,cc)));
+end-do
+writeln;
+
+forall(dd in Dists, cc in Customers) do
+	writeln("z("+dd+","+cc+"): ", getsol(z(dd,cc)));
+end-do
+writeln;
+
+end-model

@@ -1,0 +1,180 @@
+model Exercise2F
+
+options explterm
+options noimplicit
+
+uses "mmxprs";
+
+
+declarations
+	inputFile:			string;
+	Factories: 			set of integer;
+	Dists: 	            set of integer;
+	Customers: 	        set of integer;
+	Scenarios: 	        set of integer;
+	nFactories: 		integer;
+	nDists: 		    integer;
+	nCustomers: 		integer;
+	nScenarios: 		integer;
+end-declarations
+
+inputFile := "exercise_2f_uncorrelated.txt";
+
+
+! Read input sets
+initializations from inputFile
+	nFactories;
+	nDists;
+	nCustomers;
+	nScenarios;
+end-initializations
+
+Factories := 1..nFactories;
+Dists := 1..nDists;
+Customers := 1..nCustomers;
+Scenarios := 1..nScenarios;
+
+
+! Read input parameters
+declarations
+	CostFD: 		    dynamic array(Factories, Dists) of real;			    !c_{f,d}
+	CostFC: 		    dynamic array(Factories, Customers) of real;			!c_{f,c}
+	CostDC: 		    dynamic array(Dists, Customers) of real;			    !c_{d,c}
+	ProductionCapacity: dynamic array(Factories) of integer;				    !q_{f}
+	MaxThroughput: 	    dynamic array(Dists) of integer;				        !t_{d}
+	Demand: 		    dynamic array(Customers, Scenarios) of integer;			!d_{c,s}
+end-declarations
+
+initializations from inputFile
+	CostFD;
+	CostFC;
+	CostDC;
+	ProductionCapacity;
+	MaxThroughput;
+	Demand;
+end-initializations
+
+
+! Declare model
+declarations
+  Objective:				    linctr;                                                 	! Objective
+  ProductionCapConstraints:     dynamic array(Factories, Scenarios) of linctr;          	! (8) Production capacity
+  FlowConstraints: 	            dynamic array(Dists, Scenarios) of linctr;              	! (9) Flow conservation
+  ThroughputCapConstraints: 	dynamic array(Dists, Scenarios) of linctr;              	! (10) Distribution center throughput
+  DemandConstraints: 	        dynamic array(Customers, Scenarios) of linctr;          	! (11) Customer demand
+  x: 						    dynamic array(Factories, Dists, Scenarios) of mpvar;    	! (14) Flow from factory to distribution center
+  xNA: 						    dynamic array(Factories, Dists) of mpvar;    				!      Non-anticipativity variables
+  xNAConstraints:				dynamic array(Factories, Dists, Scenarios) of linctr;   	!      Non-anticipativity constraints
+  y: 						    dynamic array(Factories, Customers, Scenarios) of mpvar;	! (15.1) Flow from factory to customer
+  yNA: 						    dynamic array(Factories, Customers) of mpvar;    			!        Non-anticipativity variables
+  yNAConstraints:				dynamic array(Factories, Customers, Scenarios) of linctr;   !        Non-anticipativity constraints
+  w: 						    dynamic array(Factories, Customers, Scenarios) of mpvar;	! (15.2) Flow from factory to customer using express delivery
+  z: 						    dynamic array(Dists, Customers, Scenarios) of mpvar;    	! (16) Flow from distribution center to customer
+end-declarations
+
+
+! Initialize variables
+forall(f in Factories, d in Dists, s in Scenarios | not CostFD(f,d) = -1) do
+	create(x(f,d,s));
+end-do
+forall(f in Factories, d in Dists | not CostFD(f,d) = -1) do
+	create(xNA(f,d));
+end-do
+
+forall(f in Factories, c in Customers, s in Scenarios | not CostFC(f,c) = -1) do
+	create(y(f,c,s));
+end-do
+forall(f in Factories, c in Customers | not CostFC(f,c) = -1) do
+	create(yNA(f,c));
+end-do
+
+forall(f in Factories, c in Customers, s in Scenarios | not CostFC(f,c) = -1) do
+	create(w(f,c,s));
+end-do
+
+forall(d in Dists, c in Customers, s in Scenarios | not CostDC(d,c) = -1) do
+	create(z(d,c,s));
+end-do
+
+
+! (8) Production capacity
+forall(f in Factories, s in Scenarios) do
+	ProductionCapConstraints(f,s) :=
+	        sum(d in Dists) x(f,d,s) +
+	        sum(c in Customers) (y(f,c,s) + w(f,c,s)) <= ProductionCapacity(f);
+end-do
+
+! (9) Flow conservation constraint (Allows a buffer in distribution center using >= constraint)
+forall(d in Dists, s in Scenarios) do
+	FlowConstraints(d,s) := sum(f in Factories) x(f,d,s) >= sum(c in Customers) z(d,c,s);
+end-do
+
+! (10) Distribution center throughput constraint
+forall(d in Dists, s in Scenarios) do
+    ThroughputCapConstraints(d,s) := sum(f in Factories) x(f,d,s) <= MaxThroughput(d);
+end-do
+
+! (11) Customer demand constraint
+forall(c in Customers, s in Scenarios) do
+    DemandConstraints(c,s) := sum(f in Factories) (y(f,c,s) + w(f,c,s)) + sum(d in Dists) z(d,c,s) = Demand(c,s);
+end-do
+
+! (12) Non-anticipativity for x
+forall(f in Factories, d in Dists | not CostFD(f,d) = -1) do
+    forall(s in Scenarios) do
+    	xNAConstraints(f,d,s) := x(f,d,s) = xNA(f,d);
+	end-do
+end-do
+
+! (13) Non-anticipativity for y
+forall(f in Factories, c in Customers | not CostFC(f,c) = -1) do
+    forall(s in Scenarios) do
+    	yNAConstraints(f,c,s) := y(f,c,s) = yNA(f,c);
+	end-do
+end-do
+
+
+! Solve model
+Objective := 1/nScenarios * (
+	sum(s in Scenarios) (
+		sum(f in Factories, d in Dists)        CostFD(f,d) * x(f,d,s) +
+        sum(f in Factories, c in Customers)    CostFC(f,c) * (y(f,c,s) + 2 * w(f,c,s)) +
+	    sum(d in Dists, c in Customers)        CostDC(d,c) * z(d,c,s)
+	)
+);
+minimize(Objective);
+
+
+writeln("\n--------- SOLUTION ---------");
+writeln("Objective value: " + getsol(Objective));
+writeln;
+
+writeln("CostFD: ", CostFD);
+writeln("CostFC: ", CostFC);
+writeln("CostDC: ", CostDC);
+writeln("ProductionCapacity: ", ProductionCapacity);
+writeln("MaxThroughput: ", MaxThroughput);
+writeln("Demand: ", Demand);
+
+writeln("\nVariables are: ");
+forall(ss in Scenarios, ff in Factories, dd in Dists) do
+	writeln("x("+ff+","+dd+","+ss+"): ", getsol(x(ff,dd,ss)));
+end-do
+writeln;
+
+forall(ss in Scenarios, ff in Factories, cc in Customers) do
+	writeln("y("+ff+","+cc+","+ss+"): ", getsol(y(ff,cc,ss)));
+end-do
+writeln;
+
+forall(ss in Scenarios, ff in Factories, cc in Customers) do
+	writeln("w("+ff+","+cc+","+ss+"): ", getsol(w(ff,cc,ss)));
+end-do
+writeln;
+
+forall(ss in Scenarios, dd in Dists, cc in Customers) do
+	writeln("z("+dd+","+cc+","+ss+"): ", getsol(z(dd,cc,ss)));
+end-do
+writeln;
+
+end-model
