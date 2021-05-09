@@ -128,6 +128,8 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Ignore dotfiles and 'dump' directory
+# Ignore dotfiles, 'dump' directory and exported models
 **/dump
+**/*.lp
 **/.*
+!**/.gitignore

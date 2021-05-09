@@ -1,0 +1,111 @@
+model Exercise2Int
+
+! Note: For simplicity we implemented the KKT conditions using non-disjunctive constraints in the model formulation below.
+
+options explterm
+options noimplicit
+
+uses "mmxnlp";
+uses "mmxprs";
+
+
+declarations
+	inputFile:			string;
+	Suppliers: 	        set of integer;
+	nSuppliers: 		integer;
+	Price:				integer;
+end-declarations
+
+inputFile := "exercise_2.txt";
+
+
+! Read input sets
+initializations from inputFile
+	nSuppliers;
+	Price;
+end-initializations
+
+Suppliers := 1..nSuppliers;
+
+
+! Read input parameters
+declarations
+	Cost: 		    dynamic array(Suppliers) of real;
+	Capacity:       dynamic array(Suppliers) of integer;
+	KKTCoeffs:      dynamic array(Suppliers, Suppliers) of integer;
+	KKTConstants:   dynamic array(Suppliers) of integer;
+end-declarations
+
+initializations from inputFile
+	Cost;
+	Capacity;
+	KKTCoeffs;
+	KKTConstants;
+end-initializations
+
+
+! Declare model
+declarations
+  q: 						    array(Suppliers) of mpvar;      		! Quantity
+  v: 						    array(Suppliers) of mpvar;          	! Lagrangean multiplier / dual price of capcaity
+  Objective :				    nlctr;                                  ! Objective
+  CapacityConstraints:  		dynamic array(Suppliers) of linctr;
+  KKTConstraints1:  			dynamic array(Suppliers) of linctr;
+  KKTConstraints2:  			dynamic array(Suppliers) of nlctr;
+  DualityConstraints: 			dynamic array(Suppliers) of nlctr;
+end-declarations
+
+
+! Initialize variables
+forall(s in Suppliers) do
+	create(q(s));
+	create(v(s));
+	q(s) is_integer;
+end-do
+
+! Stationarity conditions
+forall(s1 in Suppliers) do
+	KKTConstraints1(s1) :=					KKTConstants(s1) - sum(s2 in Suppliers) KKTCoeffs(s1, s2) * q(s2) - v(s1) <= 0;
+	KKTConstraints2(s1) := q(s1) * (KKTConstants(s1) - sum(s2 in Suppliers) KKTCoeffs(s1, s2) * q(s2) - v(s1)) = 0;
+end-do
+
+! Capacity constraints
+forall(s in Suppliers) CapacityConstraints(s) := q(s) - Capacity(s) <= 0;
+
+! Duality constraints
+forall(s in Suppliers) DualityConstraints(s) := v(s) * (Capacity(s) - q(s)) = 0;
+
+! Implicit non-negativity constraints for q
+! Implicit non-negativity constraints for v
+
+! Solve model
+Objective := sum(i in Suppliers)
+				(
+					Cost(i) * q(i) +
+					q(i) ^ 2 -
+					(100 - sum(j in Suppliers) q(i))
+				) -
+             1/2 * (sum(i in Suppliers) q(i)^2);
+
+minimize(Objective);
+
+
+writeln("\n--------- SOLUTION ---------");
+forall(ss in Suppliers) do
+	writeln("Results for supplier '" + ss + "'");
+	writeln(" — Quantity = ", q(ss).sol);
+	writeln(" — Income   = ", Price * q(ss).sol);
+	writeln(" — Costs    = ", Cost(ss) * q(ss).sol + q(ss).sol ^ 2);
+	writeln(" — Dual cost of capacity = ", v(ss).sol);
+	writeln;
+end-do
+
+writeln("Market price     = ", Price - sum(i in Suppliers) q(i).sol);
+writeln("Consumer surplus = ", 1/2 * (sum(i in Suppliers)(q(i).sol)) ^ 2);
+
+writeln;
+forall(ss in Suppliers) do
+	writeln("Dual v . " + ss + ": ", v(ss).sol);
+end-do
+
+end-model
